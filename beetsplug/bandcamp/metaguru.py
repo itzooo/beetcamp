@@ -1,30 +1,29 @@
 """Module for parsing bandcamp metadata."""
+
 import itertools as it
 import json
 import operator as op
 import re
-import sys
 from collections import Counter
 from datetime import date, datetime
-from functools import partial
+from functools import cached_property, partial
 from typing import Any, Dict, Iterable, List, Optional, Set
 from unicodedata import normalize
 
 from beets import __version__ as beets_version
 from beets import config as beets_config
 from beets.autotag.hooks import AlbumInfo, TrackInfo
+from packaging import version
 from pycountry import countries, subdivisions
 
-from ._helpers import PATTERNS, Helpers, MediaInfo
-from ._tracks import Track, Tracks
 from .album import AlbumName
+from .helpers import PATTERNS, Helpers, MediaInfo
+from .track import Track
+from .tracks import Tracks
 
-if sys.version_info.minor > 7:
-    from functools import cached_property  # pylint: disable=ungrouped-imports
-else:
-    from cached_property import cached_property  # type: ignore # pylint: disable=import-error # noqa
-
-NEW_BEETS = int(beets_version.split(".")[1]) > 4
+BEETS_VERSION = version.parse(beets_version)
+EXTENDED_FIELDS_SUPPORT = version.Version("1.5.0") <= BEETS_VERSION
+ALBUMTYPES_LIST_SUPPORT = version.Version("1.6.0") < BEETS_VERSION
 
 JSONDict = Dict[str, Any]
 
@@ -34,6 +33,7 @@ COUNTRY_OVERRIDES = {
     "UK": "GB",  # pycountry: Great Britain
     "D.C.": "US",
     "South Korea": "KR",  # pycountry: Korea, Republic of
+    "Turkey": "TR",  # pycountry: only handles Türkiye
 }
 DATA_SOURCE = "bandcamp"
 WORLDWIDE = "XW"
@@ -63,7 +63,7 @@ class Metaguru(Helpers):
         self.va_name = beets_config["va_name"].as_str() or self.va_name
         self._tracks = Tracks.from_json(meta)
         self._album_name = AlbumName(
-            meta, self.all_media_comments, self._tracks.albums_in_titles
+            meta.get("name") or "", self.all_media_comments, self._tracks.album
         )
 
     @classmethod
@@ -80,7 +80,7 @@ class Metaguru(Helpers):
         return set(self.config.get("excluded_fields") or [])
 
     @property
-    def comments(self) -> str:
+    def comments(self) -> Optional[str]:
         """Return release, media descriptions and credits separated by
         the configured separator string.
         """
@@ -91,11 +91,14 @@ class Metaguru(Helpers):
 
         parts.append(self.meta.get("creditText") or "")
         sep: str = self.config["comments_separator"]
-        return sep.join(filter(op.truth, parts)).replace("\r", "")
+        return sep.join(filter(None, parts)).replace("\r", "") or None
 
     @cached_property
     def all_media_comments(self) -> str:
-        return "\n".join([*[m.description for m in self.media_formats], self.comments])
+        return "\n".join([
+            *[m.description for m in self.media_formats],
+            self.comments or "",
+        ])
 
     @cached_property
     def label(self) -> str:
@@ -188,9 +191,9 @@ class Metaguru(Helpers):
     @cached_property
     def general_catalognum(self) -> str:
         """Find catalog number in the media-agnostic release metadata and cache it."""
-        return self._tracks.single_catalognum or self.parse_catalognum(
+        return self._tracks.catalognum or self.parse_catalognum(
             album=self.meta["name"],
-            description=self.comments,
+            description=self.comments or "",
             label=self.label if not self._singleton else "",
             artistitles=self._tracks.artistitles,
         )
@@ -286,7 +289,7 @@ class Metaguru(Helpers):
     def is_single_album(self) -> bool:
         return (
             self._singleton
-            or len({t.main_title for t in self.tracks}) == 1
+            or len({t.title_without_remix for t in self.tracks}) == 1
             or len(self._tracks.raw_names) == 1
         )
 
@@ -348,7 +351,7 @@ class Metaguru(Helpers):
         return "album"
 
     @cached_property
-    def albumtypes(self) -> str:
+    def albumtypes(self) -> List[str]:
         albumtypes = {self.albumtype}
         if self.is_comp:
             if self.albumtype == "ep":
@@ -365,7 +368,7 @@ class Metaguru(Helpers):
         if len(self.tracks.remixers) == len(self.tracks):
             albumtypes.add("remix")
 
-        return "; ".join(sorted(albumtypes))
+        return sorted(albumtypes)
 
     @cached_property
     def va(self) -> bool:
@@ -385,7 +388,7 @@ class Metaguru(Helpers):
 
     @cached_property
     def genre(self) -> Optional[str]:
-        kws: Iterable[str] = map(str.lower, self.meta["keywords"])
+        kws: Iterable[str] = map(str.lower, self.meta.get("keywords", []))
         if self.style:
             exclude_style = partial(op.ne, self.style.lower())
             kws = filter(exclude_style, kws)
@@ -420,9 +423,11 @@ class Metaguru(Helpers):
     def _common_album(self) -> JSONDict:
         common_data: JSONDict = {"album": self.album_name}
         fields = ["label", "catalognum", "albumtype", "country"]
-        if NEW_BEETS:
+        if EXTENDED_FIELDS_SUPPORT:
             fields.extend(["genre", "style", "comments", "albumtypes"])
         common_data.update(self.get_fields(fields))
+        if EXTENDED_FIELDS_SUPPORT and not ALBUMTYPES_LIST_SUPPORT:
+            common_data["albumtypes"] = "; ".join(common_data["albumtypes"])
         reldate = self.release_date
         if reldate:
             common_data.update(self.get_fields(["year", "month", "day"], reldate))
@@ -438,7 +443,7 @@ class Metaguru(Helpers):
             data.pop("catalognum", None)
         if not data["lyrics"]:
             data.pop("lyrics", None)
-        if not NEW_BEETS:
+        if not EXTENDED_FIELDS_SUPPORT:
             data.pop("catalognum", None)
             data.pop("lyrics", None)
         for field in set(data.keys()) & self.excluded_fields:
@@ -451,7 +456,7 @@ class Metaguru(Helpers):
         self._singleton = True
         self.media = self.media_formats[0]
         track = self._trackinfo(self.tracks.first)
-        if NEW_BEETS:
+        if EXTENDED_FIELDS_SUPPORT:
             track.update(self._common_album)
             track.pop("album", None)
         track.track_id = track.data_url
@@ -485,10 +490,10 @@ class Metaguru(Helpers):
             setattr(album_info, key, val)
         album_info.album_id = self.media.album_id
         if self.media.name == "Vinyl":
-            album_info = self.add_track_alts(album_info, self.comments)
+            album_info = self.add_track_alts(album_info, self.comments or "")
         return album_info
 
     @cached_property
-    def albums(self) -> Iterable[AlbumInfo]:
+    def albums(self) -> List[AlbumInfo]:
         """Return album for the appropriate release format."""
         return list(map(self.get_media_album, self.media_formats))

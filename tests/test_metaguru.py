@@ -1,9 +1,10 @@
 """Module the Metaguru class functionality."""
+
 from copy import deepcopy
 from datetime import date
 
 import pytest
-from beetsplug.bandcamp._metaguru import Metaguru
+from beetsplug.bandcamp.metaguru import Metaguru
 
 pytestmark = pytest.mark.parsing
 
@@ -13,7 +14,7 @@ _p = pytest.param
 @pytest.mark.parametrize(
     ("descr", "disctitle", "creds", "expected"),
     [
-        _p("", "", "", "", id="empty"),
+        _p("", "", "", None, id="empty"),
         _p("hello", "", "", "hello", id="only main desc"),
         _p("", "sick vinyl", "", "sick vinyl", id="only media desc"),
         _p("", "", "credit", "credit", id="only credits"),

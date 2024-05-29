@@ -1,8 +1,9 @@
 """Module with a Helpers class that contains various static, independent functions."""
-import itertools as it
-import operator as op
+
 import re
 from functools import lru_cache, partial
+from itertools import chain, starmap
+from operator import contains
 from typing import Any, Dict, Iterable, List, NamedTuple, Pattern
 
 from beets.autotag.hooks import AlbumInfo
@@ -30,7 +31,7 @@ class MediaInfo(NamedTuple):
 
 
 CATALOGNUM_CONSTRAINT = r"""(?<![]/@-])(\b
-(?!\W|LC[ ]|VA[\d ]+|[EL]P\W|[^\n.]+[ ](?:20\d\d|VA[ \d]+)|(?i:vol|disc|number|rd-9))
+(?!\W|LC[ ]|VA[\d ]+|[EL]P[\W\d]|[^\n.]+[ ](?:20\d\d|VA[ \d]+)|(?i:vol|disc|number|rd-9))
 {}
 \b(?!["%]))"""
 _cat_pat = CATALOGNUM_CONSTRAINT.format(
@@ -41,6 +42,7 @@ _cat_pat = CATALOGNUM_CONSTRAINT.format(
     | [A-Z]{2,}[A-Z.$-]*\d{2,}   # HS11, USE202, HEY-101, LI$INGLE025
     | (?<!\w\W)[A-Z.]{2,}[ ]\d+  # OBS.CUR 9
     | [A-z]+-[A-z]+[ ]?\d+       # o-ton 119
+    | [A-z]+[ ]?(?:[EL]P)\d+     # Dystopian LP01
     | \w+[A-z]0\d+               # 1ØPILLS018, fa036
     | [a-z]+(?:cd|lp|:)\d+       # ostgutlp45, reni:7
     | [A-z]+\d+-\d+              # P90-003
@@ -61,7 +63,7 @@ CATNUM_PAT = {
     # enclosed by parens or square brackets, but not ending with MIX
     "delimited": re.compile(rf"(?:[\[(])(?!.*MIX){_cat_pat}(?:[])]|$)", re.VERBOSE),
     # can possibly be followed up by a second catalogue number
-    "anywhere": re.compile(rf"({_cat_pat}(\ /\ {_cat_pat})?)", re.VERBOSE),
+    "anywhere": re.compile(rf"({_cat_pat}(\ [/-]\ {_cat_pat})?)", re.VERBOSE),
 }
 
 PATTERNS: Dict[str, Pattern[str]] = {
@@ -69,20 +71,18 @@ PATTERNS: Dict[str, Pattern[str]] = {
     "meta": re.compile(r'.*"@id".*'),
     "ft": re.compile(
         r"""
-        [ ]*                     # all preceding space
-        ((?P<br>[\[(])|\b)       # bracket or word boundary
-        (ft|feat|featuring)[. ]  # one of the three ft variations
-        (
-            # when it does not start with a bracket, do not allow " - " in it, otherwise
-            # we may match full track name
-            (?(br)|(?!.*[ ]-[ ].*))
-            # anything but brackets or a slash, except for a slash preceded
-            # by a non-space (can be part of artist or title)
-            (?:[^]\[()/]|\S/)+
+        [ ]*                            # all preceding space
+        ((?P<br>[([{])|\b)              # bracket or word boundary
+        (?P<ft>
+            (ft|feat|featuring|(?<=\()with|w/(?![ ]you))[. ]+ # any ft variation
+            (?P<ft_artist>.+?)
+            (?<!mix)                    # does not end with "mix"
+            (\b|['"])                   # ends with a word boundary or quote
         )
-        (?<!mix)\b    # does not end with "mix"
-        (?(br)[]\)])  # if it started with a bracket, it must end with a closing bracket
-        [ ]*          # trailing space
+        (?(br)                          # if started with a bracket
+              [])}]                     # must end with a closing bracket
+            | (?=\ -\ |\ *[][)(/]|$)    # otherwise ends with of these combinations
+        )
     """,
         re.I | re.VERBOSE,
     ),
@@ -96,29 +96,47 @@ rm_strings = [
     r"^[EL]P( \d+)?",
     r"\((digital )?album\)",
     r"\(single\)",
-    r"^v/?a\W*|va$",
     r"\Wvinyl\W|vinyl-only",
     "compiled by.*",
     r"[\[(]presented by.*",
-    r"free download|\([^()]*free(?!.*mix)[^()]*\)",
-    "(\W|\W )bonus( \w+)*",
-    r"[+][\w ]+remix|\(with remixes\)",
+    r"free download|\([^()]*\bfree(?!.*mix)[^()]*\)",
+    r"(\W|\W )bonus( \w+)*",
+    "Various -",
+    r"CD ?\d+",
 ]
 
-_remix_pat = r"(?P<remix>((?P<remixer>[^])]+) )?\b((re)?mix|edit|bootleg)\b[^])]*)"
+REMIX = re.compile(
+    r"(?P<remix>((?P<remixer>[^])]+) )?\b((re)?mix|edit|bootleg)\b[^])]*)", re.I
+)
+CAMELCASE = re.compile(r"(?<=[a-z])(?=[A-Z])")
+
+
+def split_artist_title(m: re.Match) -> str:
+    """See for yourself.
+
+    https://examine-archive.bandcamp.com/album/va-examine-archive-international-sampler-xmn01
+    """
+    artist, title = m.groups()
+    artist = CAMELCASE.sub(" ", artist)
+    title = CAMELCASE.sub(" ", title)
+
+    return f"{artist} - {title}"
+
+
 # fmt: off
 CLEAN_PATTERNS = [
-    (re.compile(rf"(([\[(])|(^| ))\*?({'|'.join(rm_strings)})(?(2)[])]|( |$))", re.I), ""),       # noqa
+    (re.compile(rf"(([\[(])|(^| ))\*?({'|'.join(rm_strings)})(?(2)[])]|([- ]|$))", re.I), ""),       # noqa
     (re.compile(r" -(\S)"), r" - \1"),                    # hi -bye          -> hi - bye
     (re.compile(r"(\S)- "), r"\1 - "),                    # hi- bye          -> hi - bye
     (re.compile(r"  +"), " "),                            # hi  bye          -> hi bye
     (re.compile(r"(- )?\( *"), "("),                      # hi - ( bye)      -> hi (bye)
     (re.compile(r" \)+|(\)+$)"), ")"),                    # hi (bye ))       -> hi (bye)
     (re.compile(r"- Reworked"), "(Reworked)"),            # bye - Reworked   -> bye (Reworked)    # noqa
-    (re.compile(rf"(\({_remix_pat})$", re.I), r"\1)"),    # bye - (Some Mix  -> bye - (Some Mix)  # noqa
-    (re.compile(rf"- *({_remix_pat})$", re.I), r"(\1)"),  # bye - Some Mix   -> bye (Some Mix)    # noqa
+    (re.compile(rf"(\({REMIX.pattern})$", re.I), r"\1)"),    # bye - (Some Mix  -> bye - (Some Mix)  # noqa
+    (re.compile(rf"- *({REMIX.pattern})$", re.I), r"(\1)"),  # bye - Some Mix   -> bye (Some Mix)    # noqa
     (re.compile(r'(^|- )[“"]([^”"]+)[”"]( \(|$)'), r"\1\2\3"),   # "bye" -> bye; hi - "bye" -> hi - bye  # noqa
-    (re.compile(r"\((?i:(the )?(remixes))\)"), r"\2"),    # Album (Remixes)  -> Album Remixes     # noqa
+    (re.compile(r"\((the )?(remixes)\)", re.I), r"\2"),   # Album (Remixes)  -> Album Remixes     # noqa
+    (re.compile(r"examine-.+CD\d+_([^_-]+)[_-](.*)"), split_artist_title),  # See https://examine-archive.bandcamp.com/album/va-examine-archive-international-sampler-xmn01 # noqa
 ]
 # fmt: on
 
@@ -127,7 +145,7 @@ class Helpers:
     @staticmethod
     def get_label(meta: JSONDict) -> str:
         try:
-            item = meta["albumRelease"][0]["recordLabel"]
+            item = meta.get("inAlbum", meta)["albumRelease"][0]["recordLabel"]
         except (KeyError, IndexError):
             item = meta["publisher"]
         return item.get("name") or ""
@@ -147,7 +165,7 @@ class Helpers:
         """
         no_ft_artists = (PATTERNS["ft"].sub("", a) for a in artists)
         split = map(PATTERNS["split_artists"].split, ordset(no_ft_artists))
-        split_artists = ordset(map(str.strip, it.chain(*split))) - {"", "more"}
+        split_artists = ordset(map(str.strip, chain(*split))) - {"", "more"}
 
         for artist in list(split_artists):
             # ' & ' or ' X ' may be part of single artist name, so we need to be careful
@@ -179,7 +197,9 @@ class Helpers:
             cases.append((pat, "\n".join((album, disctitle, description))))
 
         def find(pat: Pattern[str], string: str) -> str:
-            """Return the match if it is
+            """Return the match.
+
+            It is legitimate if it is
             * not found in any of the track artists or titles
             * made of the label name when it has a space and is shorter than 6 chars
             """
@@ -194,39 +214,43 @@ class Helpers:
             return ""
 
         try:
-            return next(filter(None, it.starmap(find, cases)))
+            return next(filter(None, starmap(find, cases)))
         except StopIteration:
             return ""
 
     @staticmethod
     def clean_name(name: str) -> str:
+        """Both album and track names are cleaned using these patterns."""
         for pat, repl in CLEAN_PATTERNS:
             name = pat.sub(repl, name).strip()
         return name
 
     @staticmethod
-    def get_genre(keywords, config, label):
-        # type: (Iterable[str], JSONDict, str) -> Iterable[str]
+    def get_genre(
+        keywords: Iterable[str], config: JSONDict, label: str
+    ) -> Iterable[str]:
         """Return a comma-delimited list of valid genres, using MB genres for reference.
 
-        Initially, exclude keywords that are label names (unless they are valid MB genres)
+        1. Exclude keywords that are label names, unless they are a valid MB genre
 
-        Verify each keyword's (potential genre) validity w.r.t. the configured `mode`:
+        2. Verify each keyword's (potential genre) validity w.r.t. the configured `mode`
           * classical: valid only if the _entire keyword_ matches a MB genre in the list
-          * progressive: either above or if each of the words matches MB genre - since it
-            is effectively a subgenre.
-          * psychedelic: either one of the above or if the last word is a valid MB genre.
+          * progressive: either above or if each of the words matches MB genre - since
+            it is effectively a subgenre.
+          * psychedelic: one of the above or if the last word is a valid MB genre.
             This allows to be flexible regarding the variety of potential genres while
             keeping away from spammy ones.
 
-        Once we have the list of keywords that make it through the mode filters,
-        an additional filter is executed:
-          * if a keyword is _part of another keyword_ (genre within a sub-genre),
-            the more generic option gets excluded, for example,
-            >>> get_genre(['house', 'garage house', 'glitch'], "classical")
-            'garage house, glitch'
+        3. Once we have the list of keywords that coming out of the mode filters,
+           an additional filter is executed:
+           * if a keyword is _part of another keyword_ (genre within a sub-genre),
+             we keep the more specific genre, for example
+             >>> get_genre(["house", "garage house", "glitch"], "classical")
+             ["garage house", "glitch"]
+
+             "garage house" is preferred over "house".
         """
-        valid_mb_genre = partial(op.contains, GENRES)
+        valid_mb_genre = partial(contains, GENRES)
         label_name = label.lower().replace(" ", "")
 
         def is_label_name(kw: str) -> bool:
@@ -239,7 +263,7 @@ class Helpers:
             if config["mode"] == "classical":
                 return valid_mb_genre(kw)
 
-            words = map(str.strip, kw.split(" "))
+            words = map(str.strip, re.split("[ -]", kw))
             if config["mode"] == "progressive":
                 return valid_mb_genre(kw) or all(map(valid_mb_genre, words))
 
@@ -248,23 +272,26 @@ class Helpers:
         unique_genres: ordset[str] = ordset()
         # expand badly delimited keywords
         split_kw = partial(re.split, r"[.] | #| - ")
-        for kw in it.chain.from_iterable(map(split_kw, keywords)):
+        for kw in chain.from_iterable(map(split_kw, keywords)):
             # remove full stops and hashes and ensure the expected form of 'and'
-            kw = re.sub("[.#]", "", str(kw)).replace("&", "and")
-            if not is_label_name(kw) and (is_included(kw) or valid_for_mode(kw)):
-                unique_genres.add(kw)
+            _kw = re.sub("[.#]", "", str(kw)).replace("&", "and")
+            if not is_label_name(_kw) and (is_included(_kw) or valid_for_mode(_kw)):
+                unique_genres.add(_kw)
 
-        def duplicate(genre: str) -> bool:
-            """Return True if genre is contained within another genre or if,
-            having removed spaces from every other, there is a duplicate found.
-            It is done this way so that 'dark folk' is kept while 'darkfolk' is removed,
-            and not the other way around.
+        def within_another_genre(genre: str) -> bool:
+            """Check if this genre is part of another genre.
+
+            Remove spaces and dashes from the rest of genres and check if any of them
+            contain the given genre.
+
+            This is so that 'dark folk' is kept while 'darkfolk' is removed, and not
+            the other way around.
             """
             others = unique_genres - {genre}
-            others = others.union(x.replace(" ", "").replace("-", "") for x in others)  # type: ignore[attr-defined] # noqa
+            others |= {x.replace(" ", "").replace("-", "") for x in others}
             return any(genre in x for x in others)
 
-        return it.filterfalse(duplicate, unique_genres)
+        return (g for g in unique_genres if not within_another_genre(g))
 
     @staticmethod
     def unpack_props(obj: JSONDict) -> JSONDict:

@@ -1,15 +1,11 @@
 """Module with album parsing logic."""
-import sys
-from dataclasses import dataclass
+
 import re
-from typing import List, Set, Dict, Any
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Any, Dict, List, Optional
 
-from ._helpers import PATTERNS, Helpers
-
-if sys.version_info.minor > 7:
-    from functools import cached_property  # pylint: disable=ungrouped-imports
-else:
-    from cached_property import cached_property  # type: ignore # pylint: disable=import-error # noqa
+from .helpers import PATTERNS, Helpers
 
 JSONDict = Dict[str, Any]
 
@@ -19,69 +15,80 @@ class AlbumName:
     _series = r"(?i:\b(part|volume|pt|vol)\b\.?)"
     SERIES = re.compile(rf"{_series}[ ]?[A-Z\d.-]+\b")
     SERIES_FMT = re.compile(rf"^(.+){_series} *0*")
-    INCL = re.compile(r"[^][\w]*inc[^()]+mix(es)?[^()-]*\W?", re.I)
-    EPLP = re.compile(r"\S*(?:Double )?(\b[EL]P\b)\S*", re.I)
+    REMIX_IN_TITLE = re.compile(r"[\( :]+(with re|inc|\+).*mix(\)|(.*$))", re.I)
+    CLEAN_EPLP = re.compile(r"(?:[([]|Double ){0,2}(\b[EL]P\b)\S?", re.I)
+    EPLP_ALBUM = re.compile(
+        r"\b((?:(?!VA|Various|-)[^: ]+ )+)([EL]P(?! *\d)(?: [\w#][^ ]+$)?)"
+    )
+    QUOTED_ALBUM = re.compile(r"(['\"])([^'\"]+)\1( VA\d+)*( |$)")
+    ALBUM_IN_DESC = re.compile(r"(?:Title: ?|Album(?::|/Single) )([^\n]+)")
+    CLEAN_VA_EXCLUDE = re.compile(r"\w various artists \w", re.I)
+    CLEAN_VA = re.compile(
+        r"""
+          (?<=^)v/?a\b(?!\ \w)[^A-z(]*
+        | \W*Various\ Artists?\b(?!\ [A-z])[^A-z(]*
+    """,
+        re.IGNORECASE + re.VERBOSE,
+    )
+    COMPILATION_IN_TITLE = re.compile(r"compilation|best of|anniversary", re.I)
 
-    meta: JSONDict
+    original: str
     description: str
-    albums_in_titles: Set[str]
+    from_track_titles: Optional[str]
 
     remove_artists = True
 
     @cached_property
-    def in_description(self) -> str:
-        """Check description for the album name header and return whatever follows it
-        if found.
-        """
-        m = re.search(r"(Title: ?|Album(:|/Single) )([^\n]+)", self.description)
-        if m:
+    def from_description(self) -> Optional[str]:
+        """Try finding album name in the release description."""
+        if m := self.ALBUM_IN_DESC.search(self.description):
             self.remove_artists = False
-            return m.group(3).strip()
-        return ""
+            return m.group(1).strip()
 
-    @cached_property
-    def original(self) -> str:
-        return self.meta.get("name") or ""
+        return None
 
     @cached_property
     def mentions_compilation(self) -> bool:
-        return bool(re.search(r"compilation|best of|anniversary", self.original, re.I))
+        return bool(self.COMPILATION_IN_TITLE.search(self.original))
 
     @cached_property
-    def parsed(self) -> str:
-        """
-        Search for the album name in the following order and return the first match:
-        1. Album name is found in *all* track names
-        2. When 'EP' or 'LP' is in the release name, album name is what precedes it.
-        3. If some words are enclosed in quotes in the release name, it is assumed
-           to be the album name. Remove the quotes in such case.
-        """
-        if len(self.albums_in_titles) == 1:
-            return next(iter(self.albums_in_titles))
+    def from_title(self) -> Optional[str]:
+        """Try to guess album name from the original title.
 
-        album = self.original
-        for pat in [
-            r"(((&|#?\b(?!Double|VA|Various)(\w|[^\w| -])+) )+[EL]P)",
-            r"((['\"])([^'\"]+)\2( VA\d+)*)( |$)",
-        ]:
-            m = re.search(pat, album)
-            if m:
-                album = m.group(1).strip()
-                return re.sub(r"^['\"](.+)['\"]$", r"\1", album)
-        return album
+        Return the first match from below, defaulting to None:
+        1. If 'EP' or 'LP' is in the original name, album name is what precedes it.
+        2. If quotes are used in the title, they probably contain the album name.
+        """
+        if m := self.EPLP_ALBUM.search(self.original):
+            return " ".join(i.strip(" '") for i in m.groups())
+
+        if m := self.QUOTED_ALBUM.search(self.original):
+            return m.expand(r"\2\3")
+
+        return None
 
     @cached_property
-    def album_sources(self) -> List[str]:
-        return list(filter(None, [self.in_description, self.parsed, self.original]))
+    def album_names(self) -> List[str]:
+        priority_list = [
+            self.from_track_titles,
+            self.from_description,
+            self.from_title,
+            self.original,
+        ]
+        return list(filter(None, priority_list))
 
     @cached_property
     def name(self) -> str:
-        return self.in_description or self.parsed or self.original
+        return next(iter(self.album_names))
 
     @cached_property
-    def series(self) -> str:
-        m = self.SERIES.search("\n".join(self.album_sources))
-        return m.group() if m else ""
+    def series_part(self) -> Optional[str]:
+        """Return series if it is found in any of the album names."""
+        for name in self.album_names:
+            if m := self.SERIES.search(name):
+                return m.group()
+
+        return None
 
     @staticmethod
     def format_series(m: re.Match) -> str:  # type: ignore[type-arg]
@@ -100,7 +107,7 @@ class AlbumName:
 
     def standardize_series(self, album: str) -> str:
         """Standardize 'Vol', 'Part' etc. format."""
-        series = self.series
+        series = self.series_part
         if not series:
             return album
 
@@ -129,7 +136,7 @@ class AlbumName:
             \W*               # pick up any punctuation
             (?<!\w[ ])        # cannot be preceded by a simple word
             \b{re.escape(label)}\b
-            (?![ -][A-Za-z])  # cannot be followed by a word
+            (?!'|[ -][A-Za-z])  # cannot be followed by a word
             ([^[\]\w]|\d)*    # pick up any digits and punctuation
         """,
             flags=re.VERBOSE | re.IGNORECASE,
@@ -137,29 +144,44 @@ class AlbumName:
         return pattern.sub(" ", name).strip()
 
     @classmethod
+    def remove_va(cls, name: str) -> str:
+        if not cls.CLEAN_VA_EXCLUDE.search(name):
+            return cls.CLEAN_VA.sub(" ", name)
+
+        return name
+
+    @classmethod
     def clean(cls, name: str, to_clean: List[str], label: str = "") -> str:
         """Return clean album name.
 
         Catalogue number and artists to be removed are provided as 'to_clean'.
         """
-        name = PATTERNS["ft"].sub(" ", name)
         name = re.sub(r"^\[(.*)\]$", r"\1", name)
 
-        escaped = [re.escape(x) for x in filter(None, to_clean)] + [
-            r"Various Artists?\b(?! [A-z])( \d+)?"
-        ]
-        for arg in escaped:
-            name = re.sub(rf" *(?i:(compiled )?by|vs|\W*split w) {arg}", "", name)
-            if not re.search(rf"\w {arg} \w|of {arg}", name, re.I):
+        for w in map(re.escape, filter(None, to_clean)):
+            name = re.sub(rf" *(?i:(compiled )?by|vs|\W*split w) {w}", "", name)
+            if not re.search(
+                rf"\w {w} \w|(of|&) {w}|{w}(['_\d]| (deluxe|[el]p\b|&))", name, re.I
+            ):
                 name = re.sub(
-                    rf"(^|[^'\])\w]|_|\b)+(?i:{arg})([^'(\[\w]|_|(\d+$))*", " ", name
+                    rf"""
+    (?<! x )
+    (^|[^\])\w])+
+    (?i:{w})
+    ([^(\[\w]| _|(\d+$))*
+                    """,
+                    " ",
+                    name,
+                    flags=re.VERBOSE,
                 ).strip()
 
+        name = PATTERNS["ft"].sub("", name)
+        name = cls.remove_va(name)
         name = cls.remove_label(Helpers.clean_name(name), label)
-        name = cls.INCL.sub("", name).strip("- ")
+        name = cls.REMIX_IN_TITLE.sub(" ", name).strip("- ")
 
         # uppercase EP and LP, and remove surrounding parens / brackets
-        name = cls.EPLP.sub(lambda x: x.group(1).upper(), name)
+        name = cls.CLEAN_EPLP.sub(lambda x: x.group(1).upper(), name)
         return name.strip(" /")
 
     def check_eplp(self, album: str) -> str:
@@ -173,7 +195,7 @@ class AlbumName:
         else:
             look_for = r"((?!The|This)\b[A-Z][^ \n]+\b )+"
 
-        m = re.search(rf"{look_for}[EL]P", self.description)
+        m = re.search(rf"{look_for}[EL]P\b", self.description)
         return m.group() if m else album
 
     def get(
@@ -183,18 +205,19 @@ class AlbumName:
         artists: List[str],
         label: str,
     ) -> str:
-        album = self.name
+        original_album = self.name
         to_clean = [catalognum]
         if self.remove_artists:
             to_clean.extend(original_artists + artists)
+        to_clean = sorted(filter(None, set(to_clean)), key=len, reverse=True)
 
-        album = self.clean(album, sorted(to_clean, key=len, reverse=True), label)
+        album = self.clean(original_album, to_clean, label)
         if album.startswith("("):
-            album = self.name
+            album = original_album
 
         album = self.check_eplp(self.standardize_series(album))
 
         if "split ep" in album.lower() or (not album and len(artists) == 2):
             album = " / ".join(artists)
 
-        return album or catalognum or self.name
+        return album or catalognum or original_album

@@ -1,6 +1,6 @@
 """Tests for genre functionality."""
 import pytest
-from beetsplug.bandcamp._metaguru import Metaguru
+from beetsplug.bandcamp.metaguru import Metaguru
 
 pytestmark = pytest.mark.parsing
 
@@ -24,6 +24,7 @@ def test_style(json_meta, beets_config):
         (["hardtrance", "hard trance"], "hard trance"),
         (["hard trance", "trance"], "hard trance"),
         (["hard trance", "hardtrance"], "hard trance"),
+        (["alt-country"], "alt-country"),
     ],
 )
 def test_genre_variations(keywords, expected, json_meta, beets_config):

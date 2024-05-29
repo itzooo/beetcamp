@@ -1,4 +1,5 @@
 """Tests for any logic found in the main plugin module."""
+
 import json
 from itertools import zip_longest
 
@@ -26,6 +27,18 @@ def check_album(actual, expected):
 
 
 @pytest.mark.parametrize(
+    "comments, expected_url",
+    [
+        ("Visit https://label.bandcamp.com", "https://label.bandcamp.com"),
+        ("Visit https://supercommuter.net", "https://supercommuter.net"),
+        ("Visit https://no-top-level-domain", None),
+    ],
+)
+def test_parse_label_url_in_comments(comments, expected_url):
+    assert BandcampPlugin.parse_label_url(comments) == expected_url
+
+
+@pytest.mark.parametrize(
     ("mb_albumid", "comments", "album", "expected_url"),
     [
         _p(ALBUM_URL, "", "a", ALBUM_URL, id="found in mb_albumid"),
@@ -49,7 +62,7 @@ def check_album(actual, expected):
 def test_find_url(mb_albumid, comments, album, expected_url):
     """URLs in `mb_albumid` and `comments` fields must be found."""
     item = Item(mb_albumid=mb_albumid, comments=comments)
-    assert BandcampPlugin()._find_url(item, album, "album") == expected_url
+    assert BandcampPlugin()._find_url_in_item(item, album, "album") == expected_url
 
 
 @pytest.mark.parametrize(

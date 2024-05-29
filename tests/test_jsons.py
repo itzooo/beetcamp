@@ -1,14 +1,15 @@
 """Tests that compare beetcamp outputs against expected JSON outputs."""
+
 from operator import itemgetter
 
 import pytest
-from beetsplug.bandcamp._metaguru import NEW_BEETS, Metaguru
+from beetsplug.bandcamp.metaguru import EXTENDED_FIELDS_SUPPORT, Metaguru
 
 pytestmark = pytest.mark.jsons
 
 
 def check(actual, expected) -> None:
-    if NEW_BEETS:
+    if EXTENDED_FIELDS_SUPPORT:
         assert dict(actual) == expected
     else:
         actual = vars(actual)
@@ -43,6 +44,9 @@ def test_parse_single_track_release(release, beets_config):
         "artist_catalognum",
         "album_in_titles",
         "remix_without_brackets",
+        "rr2",
+        "hex008",
+        "hex002",
     ],
     indirect=["release"],
 )

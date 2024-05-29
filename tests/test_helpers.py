@@ -1,6 +1,6 @@
 """Module for the helpers module tests."""
 import pytest
-from beetsplug.bandcamp._helpers import Helpers
+from beetsplug.bandcamp.helpers import Helpers
 
 pytestmark = pytest.mark.parsing
 
@@ -54,6 +54,7 @@ pytestmark = pytest.mark.parsing
         ("", "", "Modularz 40", "Modularz", "Modularz 40"),
         ("", "", " catalogue number GOOD001 ", "", "GOOD001"),
         ("", "", "RD-9", "", ""),
+        ("The Untold Way (Dystopian LP01)", "", "", "", "Dystopian LP01"),
     ],
 )
 def test_parse_catalognum(album, disctitle, description, label, expected):

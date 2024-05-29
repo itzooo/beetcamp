@@ -45,10 +45,12 @@ from beetsplug.bandcamp.album import AlbumName
         ("Diva (Incl. some sort of Remixes)", [], "Diva"),
         ("HWEP010 - MEZZ - COLOR OF WAR", ["HWEP010", "MEZZ"], "COLOR OF WAR"),
         ("O)))Bow 1", [], "O)))Bow 1"),
-        ("hi'Hello", ["hi"], "'Hello"),
+        ("hi'Hello", ["hi"], "hi'Hello"),
+        ("fjern's stuff and such", [], "fjern's stuff and such"),
         # only remove VA if album name starts or ends with it
-        ("Album VA", [], "Album"),
-        ("VA Album", [], "Album"),
+        ("Album VA", [], "Album VA"),
+        ("VA. Album", [], "Album"),
+        ("VA Album", [], "VA Album"),
         ("Album VA001", [], "Album VA001"),
         ("Album VA 03", [], "Album VA 03"),
         # remove (weird chars too) regardless of its position if explicitly excluded
@@ -58,7 +60,20 @@ from beetsplug.bandcamp.album import AlbumName
         ("Label-Album", [], "Label-Album"),
         # and remove brackets
         ("Album", [], "Album"),
+        ("Artist EP", ["Artist"], "Artist EP"),
+        ("Artist & Another EP", ["Artist", "Another"], "Artist & Another EP"),
     ],
 )
 def test_clean_name(name, extras, expected):
     assert AlbumName.clean(name, extras, label="Label") == expected
+
+
+@pytest.mark.parametrize(
+    ("original", "expected"),
+    [
+        ("Self-Medicating LP - WU87d", "Self-Medicating LP"),
+        ("Stone Techno Series - Tetragonal EP", "Tetragonal EP"),
+    ],
+)
+def test_parse_title(original, expected):
+    assert AlbumName(original, "", "").from_title == expected

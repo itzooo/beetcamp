@@ -1,8 +1,10 @@
 """Module for track parsing tests."""
+
 from operator import attrgetter
 
 import pytest
-from beetsplug.bandcamp._tracks import Tracks
+from beetsplug.bandcamp.track import Track
+from beetsplug.bandcamp.tracks import Tracks
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -15,7 +17,7 @@ def print_result(console, case, expected, result):
     table = Table("result", *expected.keys(), show_header=True, border_style="black")
     expectedrow = []
     resultrow = []
-    for key in expected.keys():
+    for key in expected:
         res_color, exp_color = "dim", "dim"
         expectedval = expected.get(key)
         resultval = result.get(key)
@@ -116,7 +118,7 @@ def test_parse_track_name(name, expected, json_track, json_meta, console):
     json_track["item"].update(name=name)
     json_meta.update(track={"itemListElement": [json_track]})
 
-    fields = "track_alt", "artist", "ft", "title", "main_title"
+    fields = "track_alt", "artist", "ft", "title", "title_without_remix"
     expected = dict(zip(fields, expected))
     if not expected["track_alt"]:
         expected["track_alt"] = None
@@ -125,37 +127,3 @@ def test_parse_track_name(name, expected, json_track, json_meta, console):
     result_track = list(tracks)[0]
     result = dict(zip(fields, attrgetter(*fields)(result_track)))
     assert result == expected, print_result(console, name, expected, result)
-
-
-@pytest.mark.parametrize(
-    ("names", "expected_names"),
-    [
-        _p(
-            ["Artist - Title", "Artist - Title"],
-            ["Artist - Title", "Artist - Title"],
-            id="no-prefixes",
-        ),
-        _p(
-            ["Artist - 01 Title"],
-            ["Artist - 01 Title"],
-            id="only-one-track",
-        ),
-        _p(
-            ["Artist - 01 Title", "Artist - Title"],
-            ["Artist - 01 Title", "Artist - Title"],
-            id="some-tracks-without-prefix",
-        ),
-        _p(
-            ["Artist - 1 Title", "Artist - 2. Title", "03 Title"],
-            ["Artist - 1 Title", "Artist - 2. Title", "03 Title"],
-            id="prefix-needs-to-be-two-numbers",
-        ),
-        _p(
-            ["Artist - 01 Title", "Artist - 02. Title", "03 Title"],
-            ["Artist - Title", "Artist - Title", "Title"],
-            id="removed-prefixes",
-        ),
-    ],
-)
-def test_remove_number_prefix(names, expected_names):
-    assert Tracks.remove_number_prefix(names) == expected_names
