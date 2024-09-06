@@ -22,16 +22,15 @@ import logging
 import re
 from contextlib import contextmanager
 from functools import lru_cache, partial
-from html import unescape
 from itertools import chain
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Literal, Sequence
 
-import requests
-from beets import IncludeLazyConfig, __version__, config, library, plugins
+from beets import IncludeLazyConfig, config, library, plugins
 
 from beetsplug import fetchart  # type: ignore[attr-defined]
 
+from .http import HTTPError, http_get_text
 from .metaguru import Metaguru
 from .search import search_bandcamp
 
@@ -57,12 +56,6 @@ DEFAULT_CONFIG: JSONDict = {
 
 ALBUM_URL_IN_TRACK = re.compile(r'<a id="buyAlbumLink" href="([^"]+)')
 LABEL_URL_IN_COMMENT = re.compile(r"Visit (https:[\w/.-]+\.[a-z]+)")
-USER_AGENT = f"beets/{__version__} +http://beets.radbox.org/"
-
-
-@lru_cache(maxsize=None)
-def get_response(url: str) -> requests.Response:
-    return requests.get(url, headers={"User-Agent": USER_AGENT})
 
 
 class BandcampRequestsHandler:
@@ -79,13 +72,11 @@ class BandcampRequestsHandler:
 
     def _get(self, url: str) -> str:
         """Return text contents of the url response."""
-        response = get_response(url)
         try:
-            response.raise_for_status()
-        except requests.HTTPError:
-            self._info("URL Not found: {}", url)
+            return http_get_text(url)
+        except HTTPError as e:
+            self._info("{}", e)
             return ""
-        return unescape(response.text)
 
     def guru(self, url: str) -> Metaguru:
         return Metaguru.from_html(self._get(url), config=self.config.flatten())
@@ -95,8 +86,8 @@ class BandcampRequestsHandler:
         """Return Metaguru for the given URL."""
         try:
             yield
-        except (KeyError, ValueError, AttributeError, IndexError):
-            self._info("Failed obtaining {}", url)
+        except (KeyError, ValueError, AttributeError, IndexError) as e:
+            self._info("Failed obtaining {}: {}", url, e)
         except Exception:  # pylint: disable=broad-except
             i_url = "https://github.com/snejus/beetcamp/issues/new"
             self._exc("Unexpected error obtaining {}, please report at {}", url, i_url)
@@ -292,7 +283,7 @@ class BandcampPlugin(BandcampRequestsHandler, plugins.BeetsPlugin):
 
     def _search(self, data: JSONDict) -> Iterable[JSONDict]:
         """Return a list of track/album URLs of type search_type matching the query."""
-        msg = "Searching {}s for {} using {}"
+        msg = "Searching releases of type '{}' for query '{}' using '{}'"
         self._info(msg, data["search_type"], data["query"], str(data))
         results = search_bandcamp(**data, get=self._get)
         return results[: self.config["search_max"].as_number()]
