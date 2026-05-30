@@ -1,14 +1,14 @@
-#!/bin/bash
-# Rename files that had the previous commit name to the new one
+#!/bin/zsh
+# Rename files that had the oldvious commit name to the new one
 
 TESTS_DIR=lib_tests
-read -r pre post
-before=${pre:0:7}
-after=${post:0:7}
 
-[[ -e $TESTS_DIR/$before ]] || exit
+while read -r old new; do
+  before=${old:0:7}
+  after=${new:0:7}
 
-echo "Renaming previous commit $before to $after"
-mv $TESTS_DIR/"$before" $TESTS_DIR/"$after"
-mv $TESTS_DIR/tracks-"$before" $TESTS_DIR/tracks-"$after"
-mv $TESTS_DIR/album-"$before" $TESTS_DIR/album-"$after"
+  [[ -e $TESTS_DIR/$before ]] || exit
+
+  echo "Renaming squash/fixup commit $before to final commit $after"
+  zmv $TESTS_DIR/'(*)'$before $TESTS_DIR/'${1}'$after
+done

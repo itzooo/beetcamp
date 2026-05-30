@@ -1,5 +1,304 @@
 ## Unreleased
 
+## [0.24.3] 2026-04-17
+
+### Fixed
+
+- `album`:
+  - (#93) Do not assume that the first part of the album such as **Neon White OST 1 - The
+    Wicked Heart** is an artist if it contains a reference to a sound track.
+  - Do not parse remix name as a catalognum in track titles such as **What Is Love (Funk
+    Tribu Edit 2K23)**
+
+## [0.24.2] 2026-04-12
+
+### Fixed
+
+- (#94) Update beets to 2.9.0 and fix tests to handle new artist credit list fields.
+
+## [0.24.1] 2026-03-31
+
+### Fixed
+
+- Fix an issue with `beetcamp` CLI where the default config was missing.
+- (#47) Fix album artist in releases with classical works.
+- (#91) Update beets to 2.8.0 and populate new `genres` list field conditionally, and fix
+  related test failures.
+
+## [0.24.0] 2026-03-03
+
+### Removed
+
+- Drop support for Python 3.9 (EOL since October 2025).
+
+### Fixed
+
+- Fix truncating comments that contain unicode characters.
+- (#83) Fix `beets` installation in CI.
+
+- `catalognum`:
+  - Handle _formerly known as_ label names, where the former label name is part of the
+    catalogue number.
+
+- `album`:
+  - Handle edge case when parsed catalogue number does not have a space, say **ABC123**
+    but it appears in the album name with a space, **ABC 123**.
+  - Fix several edge cases when artist was wrongly removed from the album name.
+
+- `albumartist`:
+  - Remove remixer lists like **(Remixes by ...** or **w/ ... remixes**
+
+- `artist`:
+  - In compilations where no artists are found, try splitting titles with a dash `-`
+    without surrounding spaces.
+
+- cleanup:
+  - Fix a couple of edge cases cleaning up digital-only artefacts.
+  - Remove **PREMIERE** from the start of album and track names.
+  - Find catalogue numbers with a shared prefix in track titles and remove them.
+
+### Added
+
+- `cover_art_url`: Add `cover_art_url` field to albums and singletons which is used by
+  `beets>=2.4.0` for artwork resolution.
+- Create `beetcamp` module for the core functionality to speed up the tool when it is used
+  as CLI.
+
+### Updated
+
+- `genre`: Update musicbrainz genre list
+
+## [0.23.0] 2025-09-20
+
+### Added
+
+- (#79) Set `original_year`, `original_month` and `original_day` fields for albums and
+  singletons.
+
+### Fixed
+
+- `catalognum`:
+  - Fix false positives that matched within parentheses in album names, like **(Remaster
+    2020)** or **(Vol. 2)**.
+
+## [0.22.0] 2025-06-16
+
+### Fixed
+
+- `album`:
+  - Keep artist in album name when it is preceded by **vs.** or **presents**.
+  - Keep title in album name when it contains **remix** and is preceded by **+**.
+  - Improve parsing of album names that end with **EP** or **LP**:
+    - Parse apostrophes correctly ([#77](https://github.com/snejus/beetcamp/issues/77))
+    - Parse **EP** and **LP** in parentheses.
+  - Remove **curated by ...** from the album name.
+
+- `catalognum`:
+  - Require at least 3 letters in prefix when it is present in the release name. This
+    fixes a few false positives where artists' names were assumed to be catalogue numbers.
+  - Fix a few false positives involving hyphenated words in lowercase.
+  - Fix false positives like **Sample Pack 5**, **PART 1**.
+
+- `title`:
+  - Improve handling of parentheses: keep space characters in unicode-art titles, such as
+    ٩(˘◡˘ ).
+  - Handle track named **- - -** (track titled **-** by artist **-** :grin:)
+
+## [0.21.0] 2024-12-14
+
+### Removed
+
+- Remove support for Python 3.8.
+
+### Added
+
+- `artists`: split artists properly, both for tracks and albums.
+
+- `comments`: Add a new configuration option `truncate_comments` which handles very long
+  release descriptions that may crash MPD.
+
+### Fixed
+
+- `album`:
+  - Remove string **free download** from the album name.
+
+- `mediums`:
+  - Fix incorrect mediums count.
+
+- `title`:
+  - Fix formatting of titles where remix is delimited by a dash or an em-dash.
+  - For some releases, handle track names where artist and title may be provided in
+    reverse order.
+  - Address an issue where track names containing **`-`** _inside parentheses_ get wrongly
+    split into artist and title.
+  - Stop stripping dashes from the beginning of track titles.
+
+- `year` / `month` / `day`:
+  - Take the timezone into account for the parsed release date.
+
+### Updated
+
+- `album`:
+  - Clean up/remove artist such as **Various**.
+  - Only remove artists and label if they are clearly separated out in the album name.
+  - Detect artists that may be separated with commas in the album, but with an ampersand
+    in the artist field, and vice versa.
+  - Remove the original albumartist unless that's the label name.
+  - Remove **w/ Some Remix** reliably.
+
+- `artist`:
+  - Ensure that artists are properly separated when a comma is present in the field.
+  - Try to keep artists in the same format as they were found on the release.
+  - Extract lead artists from track titles and use them in the albumartist field.
+  - Ignore instagram handles in the description.
+  - Do not remove the featuring artist unless they are present in one of the track titles.
+  - If there is a single albumartist in the release and it's one of the track artists,
+    just use it and ignore the rest of track artists.
+  - Deduplicate remix artists in the track artist field.
+
+- `catalognum`:
+  - Prevent matches followed by lowercase **ep**, **lp** and **va**.
+  - Prevent matches based on label name preceded by **of**.
+
+- `comment`:
+  - Do not include media description if it duplicates the release description.
+
+- `title`:
+  - Reformat titles such as **"Title" by Artist** to **Artist - Title**.
+  - Do not move remixes to the end of the title.
+  - Remove the need to parenthesize remixes and handle original titles as they are.
+
+## [0.20.0] 2024-11-04
+
+### Removed
+
+- Drop support for `beets<1.5`.
+
+### Fixed
+
+- `album`:
+  - Keep remix artist in place within 'remix' parentheses, such as **Album (Artist
+    Remix)**.
+  - When a release has the same name as the album artist, do not clean/adjust it.
+  - Keep album artist in album when it is immediately followed by a dot.
+  - Do not remove **EP** or **LP** from the beginning of the album name.
+  - Remove **`V.A`** from the beginning of the album name, in the same way we remove
+    **`VA`**.
+  - Do not split album with a year range into `albumartist` and `album`.
+
+- cleanup:
+  - Remove **`(... preview)`**, **`free dl`**, **`Name Your Price:`**, **`just out!`**,
+    **`- Album`**, **`(Selected by ...)`** from album and track names.
+  - Remove unicode HTML whitespace from incoming data.
+
+- `albumtype`:
+  - Identify **LP** / **album** type from vinyl media descriptions.
+  - Remove some funky description parsing logic responsible for multiple **ep** false
+    positives.
+  - Resolve either **ep** or **lp** to add to `albumtypes`, and never both.
+  - Check for **single** album type (expecting a single track only) before anything else.
+
+- `artist`: handle remix releases with a single title and its remixes. Instead of trying
+  to determine the artist from the titles, detect such release and use the given album
+  artist.
+
+- `catalognum`:
+  - Fix false positives:
+    - Exclude very short matches like **OP-1**, **SK-1** and **BBC6**.
+    - Exclude label name, and label name without spaces.
+    - Exclude matches followed by a comma. This excludes many artists from release
+      descriptions that happen to have names that look like catalogue numbers.
+    - Exclude matches followed by a single quote. This used to wrongly match vinyl disc
+      titles like **LABEL 12** here: `LABEL 12'' Black Vinyl`.
+    - Prevent album artists becoming catalogue numbers.
+    - Remove pattern responsible for many false positives that contain a space, like
+      **DOOM 3**, **ONLY 1** and **NIGHT 3** etc.
+    - Do not any more assume that artist **[DRAKEN49]** is a catalogue number.
+    - Instead of using a pattern like `[A-Z]+-[0-9]+` _(more than one capital letter —
+      dash — more than one number)_, explicitly specify how many letters and numbers are
+      expected for the most common variations, like **TAR30**, **RM12012**, **HEY-101**
+      etc.
+
+- `media`: ignore subscription type Bandcamp media format which returns a duplicate
+  digital media.
+
+- `title`:
+  - Remove track number from the beginning of the title more reliably.
+  - Remove label name from anywhere if it inside brackets or from the end of the title if
+    preceded by a dash or a colon.
+
+- `track`:
+  - `artist` / `title` / `track_alt`: Handle edge cases where `track_alt` is followed by a
+    single dash. Some instances were previously ignored.
+  - `artist` / `title` / `track_alt`: fix several artists and titles which had pieces
+    incorrectly identified as `track_alt`.
+  - `artist` / `title`: In releases where every track has the same title, check whether
+    this title may actually be the artist name. If so, move it to the artist field.
+  - `artist` / `title`: use characters **`[|-–—]`** explicitly for splitting artists and
+    titles.
+  - `artist` / `title`: recover some of the original titles which contain **`-`** and got
+    split into `artist` and `title`.
+  - Return an empty tracklist for [releases that have no tracks].
+
+[releases that have no tracks]: https://seagrave.bandcalmp.com/album/interlocked
+
+### Added
+
+- Auto-Tagger: Wider search analogous to cli search query as a fallback for bad or missing
+  meta data.
+- Add artist list fields support for `beets==2.0.0`.
+
+### Updated
+
+- `album`:
+  - When album name is wrapped in brackets, **[ALBUM]**, keep the brackets in place.
+  - Uncover some release names in the description preceded by **Title :**.
+
+- `albumartist`:
+  - Remove notes about remixes, like **(incl. ABC remix)** and similar.
+
+- `albumtype`:
+  - Improve accuracy of identifying **EP** and **LP** release types from the description.
+  - Include **remix** albumtype to the release when remixed track count is one less than
+    the track count.
+  - Check album names that may end with **E.P.** instead of **EP**.
+
+- `catalognum`:
+  - Add support for new formats: **`UVB76-023`**, **`SOP 061-1233`**, **`a+w lp029`**,
+    **`SK11X015`**.
+  - Parse label-like catalogue numbers for singletons too.
+  - When searching for a catalogue number which is prefixed by the label name
+    1. Take two variations of the label name
+       1. Original one
+       2. Without **Records**, **Recordings**, **Productions**, **Music** endings
+    2. Form prefixes from each variation
+       1. The original variation
+       2. With punctuation and spaces removed
+       3. Its acronym when it has multiple words
+    3. Lastly, if the original label has multiple words, use the first word as another
+       possible prefix.
+
+    For example, for a label named **Diffuse Reality Records**, the plugin is able to
+    recognize the following catalogue numbers (case insensitively)
+    - **Diffuse Reality Records**001
+    - **DiffuseRealityRecords**001
+    - **DRR**001
+    - **Diffuse Reality**001
+    - **DiffuseReality**001
+    - **DR**001
+    - **Diffuse**001
+
+  - Parse catalogue number from the description when the header is followed by a hash
+    symbol, like **CAT#: ABC-123**.
+  - Properly catch catalogue number suffix **RP**.
+  - Relax the rule that looks for a catalogue number within brackets in the release title.
+
+- `track`:
+  - For tracks named like **[Remixer] - Artist - Title** move the remixer to the end:
+    **Artist - Title [Remixer]**.
+
+## [0.19.3] 2024-10-17
+
 ### Updated
 
 - CI: Use `poetry` in the build workflow.
@@ -7,7 +306,8 @@
 
 ### Fixed
 
-- `exclude_extra_fields`: A typo that prevented exclude configurations from being applied correctly
+- `exclude_extra_fields`: A typo that prevented exclude configurations from being applied
+  correctly
 
 ## [0.19.2] 2024-08-04
 
@@ -67,8 +367,8 @@
 - `catalognum`:
 
   - allow catalogue numbers like **Dystopian LP01**
-  - parse a _range_ of catalogue numbers when it is present, for example
-    **TFT013SR - TFT-016SR**
+  - parse a _range_ of catalogue numbers when it is present, for example **TFT013SR -
+    TFT-016SR**
 
 - `comments`: use value `None` when there are no comments. In contrast to returning an
   empty string, this way during beets import the previous comment on the track will be
@@ -89,11 +389,7 @@
 
 - (#50) Fix art fetching functionality which has essentially been disabled until now.
 
-[0.17.2]: https://github.com/snejus/beetcamp/releases/tag/0.17.2
-
 ## [0.17.1] 2023-05-20
-
-[0.17.1]: https://github.com/snejus/beetcamp/releases/tag/0.17.1
 
 ### Fixed
 
@@ -102,15 +398,13 @@
 
 ## [0.17.0] 2023-05-20
 
-[0.17.0]: https://github.com/snejus/beetcamp/releases/tag/0.17.0
-
 ### Added
 
 - `album`:
 
-  - Handling unnamed (after removal of catalognum and artist names) split EPs that
-    have two artists. In accordance with [title guidelines], the EP is named by separating the artists
-    with a slash.
+  - Handling unnamed (after removal of catalognum and artist names) split EPs that have
+    two artists. In accordance with [title guidelines], the EP is named by separating the
+    artists with a slash.
   - Following the [title guidelines], the standard series format now applies to
     **Vol/Vol.**, **Volume**, **Pt** too. Previously we only considered **Part**.
 
@@ -159,8 +453,6 @@
 
 ## [0.16.3] 2023-02-13
 
-[0.16.3]: https://github.com/snejus/beetcamp/releases/tag/0.16.3
-
 ### Fixed
 
 - (#41) fix `re.error: nothing to repeat` caused by missing regex escape
@@ -179,7 +471,7 @@
     - **Album ~~by Albumartist~~**
     - **Album ~~by Albumartist vs Another Albumartist~~**
   - Remove Unicode quotes (**“”**) when they wrap the album name (same as quotes before)
-    - **~~“~~**Album**~~”~~**
+    - **~~“~~ **Album** ~~”~~**
   - Remove **split w** when it precedes the albumartist
     - **Album ~~Split W Albumartist~~**
   - Keep albumartist when it's preceded by **of**
@@ -190,8 +482,8 @@
 
 - `artist`:
 
-  - Handle some edge cases of digital-only track title cleanup, like **Unreleased
-    Bonus Track** or **Bonus Track 1**. These would previously end up in the artist name
+  - Handle some edge cases of digital-only track title cleanup, like **Unreleased Bonus
+    Track** or **Bonus Track 1**. These would previously end up in the artist name
   - Remove digital-only artifacts from the artist name too
 
 - `track_alt`: parse track alts like **B.1**
@@ -200,19 +492,16 @@
 
 ## [0.16.2] 2022-12-28
 
-[0.16.2]: https://github.com/snejus/beetcamp/releases/tag/0.16.2
-
 ### Fixed
 
-- (#40) Improve overall search reliability (#37) and handle alternative domain names, thanks @shagr4th.
+- (#40) Improve overall search reliability (#37) and handle alternative domain names,
+  thanks @shagr4th.
 
 ### Updated
 
 - internal/build: make sure tests and linting run on pull requests.
 
 ## [0.16.1] 2022-12-17
-
-[0.16.1]: https://github.com/snejus/beetcamp/releases/tag/0.16.1
 
 ### Fixed
 
@@ -221,9 +510,9 @@
 - `title`:
   - When album lists titles in the quoted form (**Artist "Title"**), split artist from the
     title correctly.
-  - Address a long-standing issue with track names of the form **Title - Some Mix** where we
-    would parse **Title** as the artist and **Some Mix** as the title. Such name now gets
-    replaced by **Title (Some Mix)** which is then attributed correctly.
+  - Address a long-standing issue with track names of the form **Title - Some Mix** where
+    we would parse **Title** as the artist and **Some Mix** as the title. Such name now
+    gets replaced by **Title (Some Mix)** which is then attributed correctly.
   - Handle remix album where titles of the remixes are not delimited in any way.
 
 ### Updated
@@ -233,11 +522,10 @@
 - `catalognum`:
   - Handling some rare edge cases of both false positives and false negatives
 - `title`:
-  - Add missing closing parenthesis for mix/edit titles: **Title (Some Mix** -> **Title (Some Mix)**
+  - Add missing closing parenthesis for mix/edit titles: **Title (Some Mix** -> **Title
+    (Some Mix)**
 
 ## [0.16.0] 2022-08-19
-
-[0.16.0]: https://github.com/snejus/beetcamp/releases/tag/0.16.0
 
 ### Fixed
 
@@ -265,13 +553,11 @@
 - `artist`:
 
   - keep the original artist separator in releases with a single track
-  - replace `//` separator with `, ` in all cases
+  - replace `//` separator with `,` in all cases
 
 - `release_date`: in rare cases when it is not found, use the _last modified_ date
 
 ## [0.15.1] 2022-06-19
-
-[0.15.1]: https://github.com/snejus/beetcamp/releases/tag/0.15.1
 
 ### Deprecations
 
@@ -282,7 +568,8 @@
 - During import, _albums_ can now again be obtained by their IDs. This functionality has
   been broken since `v0.14.0`.
 
-- `album`: when album name contains **Album (Label something)**, the Label is kept in place
+- `album`: when album name contains **Album (Label something)**, the Label is kept in
+  place
 
 - `albumartist`: remove catalogue number from the album artist when it's enclosed in
   brackets
@@ -292,11 +579,10 @@
 
 - `genre`: exclude label name, unless it maps to a valid MusicBrainz genre
 
-- `title`: handle an edge case where one of the track names contains a utf-8 equivalent of a dash
+- `title`: handle an edge case where one of the track names contains a utf-8 equivalent of
+  a dash
 
 ## [0.15.0] 2022-05-16
-
-[0.15.0]: https://github.com/snejus/beetcamp/releases/tag/0.15.0
 
 ### Added
 
@@ -312,10 +598,11 @@
     Bandcamp with the provided QUERY and returns a JSON list with all search results from
     the first page, sorted by relevancy.
 
-  - Flags **-a**, **-l** and **-t** can be used to search for **album**, **label/artist** or
-    **track** specifically.
+  - Flags **-a**, **-l** and **-t** can be used to search for **album**, **label/artist**
+    or **track** specifically.
 
-  - Run `beetcamp -h` to see more details. Example: searching for anything called **black sands**:
+  - Run `beetcamp -h` to see more details. Example: searching for anything called **black
+    sands**:
 
     ```json
     $ beetcamp 'black sands' | jq '.[:2]'
@@ -350,8 +637,8 @@
   - if `label` field is available, the plugin now takes it into account when it ranks
     search results.
   - `albumartist` field is not used to rank **compilations** anymore since some labels use
-    label name, some use the list of artists, and others a variation of **Various Artists** -
-    we cannot reliably tell. `label` is used instead.
+    label name, some use the list of artists, and others a variation of **Various
+    Artists** - we cannot reliably tell. `label` is used instead.
 
 - `album`: track titles are read to see whether they contain the album name. There are
   cases where titles have the following format: **Title [Album Name EP]**
@@ -378,9 +665,9 @@
 
 ### Fixed
 
-- search: fixed searching of singletons, where the plugin now actually performs search instead of
-  immediately returning the currently selected singleton when option **E** was selected
-  during the import process
+- search: fixed searching of singletons, where the plugin now actually performs search
+  instead of immediately returning the currently selected singleton when option **E** was
+  selected during the import process
 
 - album art fetching functionality has been broken for a while - it should now work fine
 
@@ -434,18 +721,21 @@
 
 ### Updated
 
-- internal: Tests clean up: pytest fixture-spaghetti has been replaced with JSON files that
-  contain the expected output data.
+- internal: Tests clean up: pytest fixture-spaghetti has been replaced with JSON files
+  that contain the expected output data.
 
 - `albumtype`: some accuracy improvements
 
   - For **Vinyl** media, all `disctitle`s are checked for **EP** or **LP** presence
-  - **EP**, **LP** and **album** words in release and media descriptions are counted and decide the album type
-  - If **compilation** or **best of** or **anniversary** is present in the album name, then
-    the release is a compilation
-  - A single album with an original track and several remixes now has **album** albumtype, not **single**
+  - **EP**, **LP** and **album** words in release and media descriptions are counted and
+    decide the album type
+  - If **compilation** or **best of** or **anniversary** is present in the album name,
+    then the release is a compilation
+  - A single album with an original track and several remixes now has **album** albumtype,
+    not **single**
 
-- `albumartist`: every release with more than 3 artists will now have **Various Artists** (or `va_name`) albumartist
+- `albumartist`: every release with more than 3 artists will now have **Various Artists**
+  (or `va_name`) albumartist
 
 ### Fixed
 
@@ -453,23 +743,24 @@
   - Remove **EP** or **LP** from the beginning more reliably
   - Only remove **VA** if album name starts or ends with it
 
-[0.14.0]: https://github.com/snejus/beetcamp/releases/tag/0.14.0
-
 ## [0.13.2] 2022-04-03
 
 ### Fixed
 
-- Fixed importing of officially purchased Bandcamp tracks which have **Visit {label_url}** in their `COMMENT` field (at least for FLAC files) when the album name does not contain a single ASCII alphanumeric character. We here use the album name to guess the release url, and in this case the plugin has previously been failing to take into account this edge case and failed the import process immediately.
-
-[0.13.2]: https://github.com/snejus/beetcamp/releases/tag/0.13.2
+- Fixed importing of officially purchased Bandcamp tracks which have **Visit {label_url}**
+  in their `COMMENT` field (at least for FLAC files) when the album name does not contain
+  a single ASCII alphanumeric character. We here use the album name to guess the release
+  url, and in this case the plugin has previously been failing to take into account this
+  edge case and failed the import process immediately.
 
 ## [0.13.1] 2022-04-03
 
 ### Fixed
 
-- search: changes introduced in [0.13.0] broke searching functionality for `python 3.6-3.8` due to changes in the built-in `difflib` library. This has been fixed and tests for the searching logic are now added. Thanks to @emanuele-virgillito for reporting the issue.
-
-[0.13.1]: https://github.com/snejus/beetcamp/releases/tag/0.13.1
+- search: changes introduced in [0.13.0] broke searching functionality for
+  `python 3.6-3.8` due to changes in the built-in `difflib` library. This has been fixed
+  and tests for the searching logic are now added. Thanks to @emanuele-virgillito for
+  reporting the issue.
 
 ## [0.13.0] 2022-03-22
 
@@ -495,7 +786,8 @@
 
     1. Whatever follows **Title:** in the release **description**
     1. Something in single or double quotes in the release **title**
-    1. If **EP** or **LP** is in the release **title**, whatever precedes it having removed `catalognum` and artists
+    1. If **EP** or **LP** is in the release **title**, whatever precedes it having
+       removed `catalognum` and artists
     1. Whatever is left in the release **title** having removed `catalognum` and artists
     1. Whatever precedes **EP** or **LP** string in the release **description**
     1. `catalognum`
@@ -547,21 +839,24 @@
   **VA** is followed by numbers. **VA02** is still ignored while **VAHELLO001** is now
   parsed correctly.
 
-- Fixed Github workflow which tests the package across various python and `beets` versions: they should now fail reliably. Dependencies are from now on cached, so they run fairly quickly.
+- Fixed Github workflow which tests the package across various python and `beets`
+  versions: they should now fail reliably. Dependencies are from now on cached, so they
+  run fairly quickly.
 
 - Clarified that `preferred_media` should include **Digital Media** (not **Digital**) in
   the README.
-
-[0.13.0]: https://github.com/snejus/beetcamp/releases/tag/0.13.0
 
 ## [0.12.0] 2022-02-10
 
 ### Added
 
-- `album`: following MusicBrainz [title format specification], strings **EP** and **LP** are from now on kept in place in album names.
-- `catalognum`: To find the catalog number, we have previously been looking at the release title and pointers such as **Catalogue Number:** within the release description.
+- `album`: following MusicBrainz [title format specification], strings **EP** and **LP**
+  are from now on kept in place in album names.
+- `catalognum`: To find the catalog number, we have previously been looking at the release
+  title and pointers such as **Catalogue Number:** within the release description.
 
-  In addition to the above, we now apply a generic search pattern across the rest of the text, including media title, media description and the rest of the release description.
+  In addition to the above, we now apply a generic search pattern across the rest of the
+  text, including media title, media description and the rest of the release description.
 
   For those interested, at a high level the pattern used in the search looks like below
 
@@ -583,9 +878,12 @@
   )?
   ```
 
-- `albumtype`: similar to the `catalognum`, the descriptions are searched for **EP** and **LP** strings presence to find out the `albumtype`.
+- `albumtype`: similar to the `catalognum`, the descriptions are searched for **EP** and
+  **LP** strings presence to find out the `albumtype`.
 
-- `track`: Support for tracks that do not use dash (`-`) but some other character to separate pieces of information in track names. For example, consider the following [tracklist]:
+- `track`: Support for tracks that do not use dash (`-`) but some other character to
+  separate pieces of information in track names. For example, consider the following
+  [tracklist]:
 
   ```
   A1 | WHITESHADOWHURTS x TOXICSPIKEBACK | Arcadia
@@ -596,34 +894,44 @@
   B3 | WHITESHADOWHURTS | Corrupted Entity [OAT.M's Oldschool Mix]
   ```
 
-  `beetcamp` now finds that `|` is being used as the delimiter and parses values for `track_alt`, `artist` and `title` accordingly.
+  `beetcamp` now finds that `|` is being used as the delimiter and parses values for
+  `track_alt`, `artist` and `title` accordingly.
 
 ### Updated
 
 - singleton: `album` and `albumartist` fields are not anymore populated.
-- `catalognum`: artists like **PROCESS 404** are not assumed to be catalogue numbers anymore.
-- `track_alt`: allow non-capital letters, like **a1** to be parsed and convert them to capitals.
-- `albumartist`: use **Various Artists** (or equivalent) when a release includes more than four different artists. Until now we've only done so for compilations.
+- `catalognum`: artists like **PROCESS 404** are not assumed to be catalogue numbers
+  anymore.
+- `track_alt`: allow non-capital letters, like **a1** to be parsed and convert them to
+  capitals.
+- `albumartist`: use **Various Artists** (or equivalent) when a release includes more than
+  four different artists. Until now we've only done so for compilations.
 - `genre`: genres are now sorted alphabetically
 
 ### Fixed
 
-- Support for `beets<1.5` has been broken since `0.11.0`, - it should now work fine. However, fields such as `comments` and `lyrics` are not available, and album-like metadata like `catalognum` is not available for singletons. Thanks **@zane-schaffer** for reporting this issue (Closes #22).
+- Support for `beets<1.5` has been broken since `0.11.0`, - it should now work fine.
+  However, fields such as `comments` and `lyrics` are not available, and album-like
+  metadata like `catalognum` is not available for singletons. Thanks **@zane-schaffer**
+  for reporting this issue (Closes #22).
 - `singleton`: `catalognum`, if found, is now reliably removed from the title.
-- `track.title`: `-` delimiter is handled more appropriately when it is found in the song title.
-- `albumartist`: for the Various Artists releases, the plugin will now use the globally configured `va_name` field instead of hard-coding _Various Artists_.
-- `artist`: Recent bandcamp updates of the JSON data removed artists names from most of compilations, therefore we are again having a peek at the raw HTML data to fetch the data from there.
+- `track.title`: `-` delimiter is handled more appropriately when it is found in the song
+  title.
+- `albumartist`: for the Various Artists releases, the plugin will now use the globally
+  configured `va_name` field instead of hard-coding _Various Artists_.
+- `artist`: Recent bandcamp updates of the JSON data removed artists names from most of
+  compilations, therefore we are again having a peek at the raw HTML data to fetch the
+  data from there.
 
 [tracklist]: https://scumcllctv.bandcamp.com/album/scum002-arcadia
 [title format specification]: https://beta.musicbrainz.org/doc/Style/Titles
-[0.12.0]: https://github.com/snejus/beetcamp/releases/tag/0.12.0
 
 ## [0.11.0] 2021-11-12
 
 ### Added
 
-- An entrypoint for `beetcamp`: if the package is in your `$PATH`, bandcamp
-  metadata can be obtained directly as a JSON
+- An entrypoint for `beetcamp`: if the package is in your `$PATH`, bandcamp metadata can
+  be obtained directly as a JSON
 
   ```bash
   beetcamp <bandcamp-url>
@@ -637,8 +945,8 @@
 - Two more MusicBrainz fields now get populated:
 
   - `style`: the tag/genre that bandcamp categorize the release as
-  - `genre`: comma-delimited list of release **keywords** that match any [musicbrainz
-    genres].
+  - `genre`: comma-delimited list of release **keywords** that match any
+    [musicbrainz genres].
 
   This comes with some configuration options, see the defaults below:
 
@@ -654,10 +962,10 @@
 
   See the readme for information about the different options.
 
-- New configuration option `comments_separator` to separate release, media
-  descriptions and credits. Default: `\n---\n`. Comments formatting has been
-  changing with every release without a good reason - this should stop. Ultimately it is
-  one's personal choice how they want the formatting to look like.
+- New configuration option `comments_separator` to separate release, media descriptions
+  and credits. Default: `\n---\n`. Comments formatting has been changing with every
+  release without a good reason - this should stop. Ultimately it is one's personal choice
+  how they want the formatting to look like.
 
 ### Updated
 
@@ -682,15 +990,14 @@
   data - this is now handled gracefully.
 
 [musicbrainz genres]: https://beta.musicbrainz.org/genres
-[0.11.0]: https://github.com/snejus/beetcamp/releases/tag/0.11.0
 
 ## [0.10.1] 2021-09-13
 
 ### Fixed
 
 - Fixed #18 by handling cases when a track duration is not given.
-- Fixed #19 where artist names like **SUNN O)))** would get incorrectly mistreated by
-  the album name cleanup logic due to multiple consecutive parentheses. The fix involved
+- Fixed #19 where artist names like **SUNN O)))** would get incorrectly mistreated by the
+  album name cleanup logic due to multiple consecutive parentheses. The fix involved
   adding some rules around it: they are now deduplicated _only if_
 
   - they are preceded with a space
@@ -705,8 +1012,6 @@ Thanks @arogl for reporting each of the above!
   example scenario:
   - `label: Mike`
   - `album: Mike's Creations`
-
-[0.10.1]: https://github.com/snejus/beetcamp/releases/tag/0.10.1
 
 ## [0.10.0] 2021-09-10
 
@@ -729,7 +1034,8 @@ Thanks @arogl for reporting each of the above!
     the dash and the title or artist
   - Fixed _digital only_ cleaner which would previously remove the string **Only** when
     it's found on its own
-  - Accept [**¯\\_(ツ)_/¯**](https://clandestinerecords.bandcamp.com/track/--7) as valid title
+  - Accept [**¯\\_(ツ)_/¯**](https://clandestinerecords.bandcamp.com/track/--7) as valid
+    title
   - Clean up **( Remix )** -> **(Remix)**
 
 - `country`: **Washington, D.C.** and **South Korea** have not been parsed correctly and
@@ -753,7 +1059,8 @@ Thanks @arogl for reporting each of the above!
 - `album`:
 
   - Only remove label from the album name if `albumtype` is not a compilation
-  - Remove **(FREE)**, **(FREE DL)**, **VA**, **_(Incl._ some artists _remixes)_** and alike
+  - Remove **(FREE)**, **(FREE DL)**, **VA**, **_(Incl._ some artists _remixes)_** and
+    alike
   - Improved the way **Various Artists** are cleaned up when catalognum is available
 
 - `albumartist`:
@@ -801,8 +1108,8 @@ Thanks @arogl for reporting each of the above!
 
 ### Added
 
-- Added a github action to run CI for `master` and `dev` branches. For now it's just a minimal
-  configuration and will probably get updated soon.
+- Added a github action to run CI for `master` and `dev` branches. For now it's just a
+  minimal configuration and will probably get updated soon.
 
 ## [0.9.1] 2021-06-04
 
@@ -835,7 +1142,8 @@ Thanks @arogl for reporting each of the above!
 
 - If track artist is given in the `byArtist` field of the track JSON resource, it is used.
   (Fixes #13, thanks @xeroxcat).
-- Parse cases like `Catalogue:CAT-000` from the description correctly when the space is missing.
+- Parse cases like `Catalogue:CAT-000` from the description correctly when the space is
+  missing.
 
 ### Added
 
@@ -870,7 +1178,8 @@ Thanks @arogl for reporting each of the above!
 - Parsing / logic:
 
   - Token `feat.` is now recognized as a valid member of the `artist` field.
-  - `free download`, `[EP|LP]`, `(EP|LP)`, `E.P.`, `LP` are now cleaned from the album name.
+  - `free download`, `[EP|LP]`, `(EP|LP)`, `E.P.`, `LP` are now cleaned from the album
+    name.
   - Updated `albumtype` logic: in some `compilation` cases track artists would go missing
     and get set to _Various Artists_ - instead it now defaults to the original
     `albumartist`.
@@ -887,8 +1196,8 @@ Thanks @arogl for reporting each of the above!
 
 - Internal:
 
-  - Reintroduced `@cached_property` across most of the fields having found how often certain
-    ones get called.
+  - Reintroduced `@cached_property` across most of the fields having found how often
+    certain ones get called.
 
 ### Added
 
@@ -896,8 +1205,8 @@ Thanks @arogl for reporting each of the above!
 - Added a test based on parsing _the JSON output_ directly without having to parse the
   entire HTML. Bandcamp have been moving away from HTML luckily, so let's hope the trend
   continues.
-- Added a tiny cmd-line tool `url2json` which simply outputs either a compacted or a
-  human version of the JSON data that is found for the given bandcamp URL.
+- Added a tiny cmd-line tool `url2json` which simply outputs either a compacted or a human
+  version of the JSON data that is found for the given bandcamp URL.
 
 ## [0.7.1] 2021-03-15
 
@@ -909,8 +1218,8 @@ Thanks @arogl for reporting each of the above!
 
 ### Added
 
-- For those who use `beets >= 1.5.0`, singleton tracks are now enriched with similar metadata
-  to albums (depending on whether they are found of course):
+- For those who use `beets >= 1.5.0`, singleton tracks are now enriched with similar
+  metadata to albums (depending on whether they are found of course):
 
   - `album`: **Artist - Track** usually
   - `albumartist`
@@ -951,8 +1260,8 @@ Thanks @arogl for reporting each of the above!
   3.9.
 - Sped up re-importing bandcamp items by checking whether the URL is already available
   before searching.
-- Parsing: If track's name includes _bandcamp digital (bonus|only) etc._, **bandcamp** part gets
-  removed as well.
+- Parsing: If track's name includes _bandcamp digital (bonus|only) etc._, **bandcamp**
+  part gets removed as well.
 
 ### Changed
 
@@ -983,16 +1292,17 @@ Thanks @arogl for reporting each of the above!
 
 ### Fixed
 
-- The `albumartist` that would go missing for the `beets 1.5.0` import stage has now safely returned.
+- The `albumartist` that would go missing for the `beets 1.5.0` import stage has now
+  safely returned.
 
 ## [0.5.7] 2021-02-10
 
 ### Fixed
 
-- For the case when a track or an album is getting imported through the id / URL mode, we now
-  check whether the provided URL is a Bandcamp link. In some cases parsing foreign URLs
-  results in decoding errors, so we'd like to catch those URLs early. Thanks @arogl for
-  spotting this.
+- For the case when a track or an album is getting imported through the id / URL mode, we
+  now check whether the provided URL is a Bandcamp link. In some cases parsing foreign
+  URLs results in decoding errors, so we'd like to catch those URLs early. Thanks @arogl
+  for spotting this.
 
 ## [0.5.6] 2021-02-08
 
@@ -1005,8 +1315,8 @@ Thanks @arogl for reporting each of the above!
   ignoring the numbers from the beginning of the string.
 
 - Locations that have non-ASCII characters in their names would not be identified
-  (something like _Montreal, Québec_) - now the characters are converted and
-  `pycountry` does understand them.
+  (something like _Montreal, Québec_) - now the characters are converted and `pycountry`
+  does understand them.
 
 - Fixed an edge case where an EP would be incorrectly misidentified as an album.
 
@@ -1057,9 +1367,9 @@ Thanks @arogl for reporting each of the above!
 
 ### Fixed
 
-- On Bandcamp merch is listed in the same list together with media - this is now
-  taken into account and merch is ignored. Previously, some albums would fail to
-  be returned because of this.
+- On Bandcamp merch is listed in the same list together with media - this is now taken
+  into account and merch is ignored. Previously, some albums would fail to be returned
+  because of this.
 
 ## [0.5.1] 2021-01-18
 
@@ -1071,13 +1381,12 @@ Thanks @arogl for reporting each of the above!
 
 ### Added
 
-- Added some functionality to exclude digital-only tracks for media that aren't
-  _Digital Media_. A new configuration option `include_digital_only_tracks`, if
-  set to `True` will include all tracks regardless of the media, and if set to
-  `False`, will mind, for example, a _Vinyl_ media and exclude tracks that
-  have some sort of _digital only_ flag in their names, like `DIGI`, `[Digital Bonus]`,
-  `[Digital Only]` and alike. These flags are also cleared from the
-  track names.
+- Added some functionality to exclude digital-only tracks for media that aren't _Digital
+  Media_. A new configuration option `include_digital_only_tracks`, if set to `True` will
+  include all tracks regardless of the media, and if set to `False`, will mind, for
+  example, a _Vinyl_ media and exclude tracks that have some sort of _digital only_ flag
+  in their names, like `DIGI`, `[Digital Bonus]`, `[Digital Only]` and alike. These flags
+  are also cleared from the track names.
 
 ### Fixed
 
@@ -1087,29 +1396,27 @@ Thanks @arogl for reporting each of the above!
 
 ### Fixed
 
-- `release_date` search pattern now looks for a specific date format, guarding
-  it against similar matches that could be found in the description, thanks
-  @noahsager.
+- `release_date` search pattern now looks for a specific date format, guarding it against
+  similar matches that could be found in the description, thanks @noahsager.
 
 ## [0.4.3] 2021-01-17
 
 ### Fixed
 
-- Handled a `KeyError` that would come up when looking for an album/track where
-  the block describing available media isn't found. Thanks @noahsager.
+- Handled a `KeyError` that would come up when looking for an album/track where the block
+  describing available media isn't found. Thanks @noahsager.
 
 ### Changed
 
-- Info logs are now `DEBUG` logs so that they're not printed without the verbose
-  mode, thanks @arogl.
+- Info logs are now `DEBUG` logs so that they're not printed without the verbose mode,
+  thanks @arogl.
 
 ## [0.4.2] 2021-01-17
 
 ### Fixed
 
-- `catalognum` parser used to parse `Vol.30` or `Christmas 2020` as catalog
-  number - these are now excluded. It's likely that additional patterns will
-  come up later.
+- `catalognum` parser used to parse `Vol.30` or `Christmas 2020` as catalog number - these
+  are now excluded. It's likely that additional patterns will come up later.
 
 ### Added
 
@@ -1125,7 +1432,37 @@ Thanks @arogl for reporting each of the above!
 
 ### Added
 
-- The pipeline now uses generators, therefore the plug-in searches until it
-  finds a good fit and won't continue further (same as the musicbrainz autotagger)
-- Extended the parsing functionality with data like catalog number, label,
-  country etc. The full list is given in the readme.
+- The pipeline now uses generators, therefore the plug-in searches until it finds a good
+  fit and won't continue further (same as the musicbrainz autotagger)
+- Extended the parsing functionality with data like catalog number, label, country etc.
+  The full list is given in the readme.
+
+[0.10.1]: https://github.com/snejus/beetcamp/releases/tag/0.10.1
+[0.11.0]: https://github.com/snejus/beetcamp/releases/tag/0.11.0
+[0.12.0]: https://github.com/snejus/beetcamp/releases/tag/0.12.0
+[0.13.0]: https://github.com/snejus/beetcamp/releases/tag/0.13.0
+[0.13.1]: https://github.com/snejus/beetcamp/releases/tag/0.13.1
+[0.13.2]: https://github.com/snejus/beetcamp/releases/tag/0.13.2
+[0.14.0]: https://github.com/snejus/beetcamp/releases/tag/0.14.0
+[0.15.0]: https://github.com/snejus/beetcamp/releases/tag/0.15.0
+[0.15.1]: https://github.com/snejus/beetcamp/releases/tag/0.15.1
+[0.16.0]: https://github.com/snejus/beetcamp/releases/tag/0.16.0
+[0.16.1]: https://github.com/snejus/beetcamp/releases/tag/0.16.1
+[0.16.2]: https://github.com/snejus/beetcamp/releases/tag/0.16.2
+[0.16.3]: https://github.com/snejus/beetcamp/releases/tag/0.16.3
+[0.17.0]: https://github.com/snejus/beetcamp/releases/tag/0.17.0
+[0.17.1]: https://github.com/snejus/beetcamp/releases/tag/0.17.1
+[0.17.2]: https://github.com/snejus/beetcamp/releases/tag/0.17.2
+[0.18.0]: https://github.com/snejus/beetcamp/releases/tag/0.18.0
+[0.19.0]: https://github.com/snejus/beetcamp/releases/tag/0.19.0
+[0.19.1]: https://github.com/snejus/beetcamp/releases/tag/0.19.1
+[0.19.2]: https://github.com/snejus/beetcamp/releases/tag/0.19.2
+[0.19.3]: https://github.com/snejus/beetcamp/releases/tag/0.19.3
+[0.20.0]: https://github.com/snejus/beetcamp/releases/tag/0.20.0
+[0.21.0]: https://github.com/snejus/beetcamp/releases/tag/0.21.0
+[0.22.0]: https://github.com/snejus/beetcamp/releases/tag/0.22.0
+[0.23.0]: https://github.com/snejus/beetcamp/releases/tag/0.23.0
+[0.24.0]: https://github.com/snejus/beetcamp/releases/tag/0.24.0
+[0.24.1]: https://github.com/snejus/beetcamp/releases/tag/0.24.1
+[0.24.2]: https://github.com/snejus/beetcamp/releases/tag/0.24.2
+[0.24.3]: https://github.com/snejus/beetcamp/releases/tag/0.24.3
